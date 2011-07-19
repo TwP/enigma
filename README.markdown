@@ -1,5 +1,5 @@
-Logging
-=======
+Enigma
+======
 
 Enigma is part of a presentaion for the local Boulder Ruby Users Gruop. It is
 an example of integrating several Ruby gems into a coherent whole in order to
