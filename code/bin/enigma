@@ -1,0 +1,130 @@
+#!/usr/bin/env ruby
+
+root = File.expand_path('../..', __FILE__)
+
+require 'rubygems'
+require 'main'
+require File.join(root, %w[lib enigma])
+
+Main do
+  description <<-__
+Enigma Message Processing
+
+Runs an Enigma decryption engine as a daemon. The engine will read messages
+from the queue and write them to an decrypted messages folder.
+  __
+
+  examples <<-__
+Start the enigma application in the development environment (default):
+
+  enigma
+
+Specify an environment to use:
+
+  enigma production
+
+Spawn a daemon process and return:
+
+  enigma production --daemon
+
+Gracefully shutdown a daemon process:
+
+  enigma production --graceful
+
+  __
+
+  argument 'environment' do
+    description "Specifies the environment to run under (test/development/production).\nDefault: development."
+    default 'development'
+    cast :symbol
+    attribute
+  end
+
+  option('--daemon', '-d') do
+    description 'Make the server run as a daemon.'
+    attribute
+  end
+
+  option('--graceful', '-K') do
+    description 'Gracefully kill the server.'
+    attribute
+  end
+
+  option('--kill=signal', '-k') do
+    description 'Kill the server using the signal.'
+    argument :required
+    attribute
+  end
+
+  option('--status', '-s') do
+    description 'Report on the server status (running or stopped).'
+    attribute
+  end
+
+  option('--debug') do
+    description 'Set the log level to debug.'
+    attribute
+  end
+
+  option('--showconfig=attribute') do
+    description 'Show the configuration for the current environment.'
+    argument :optional
+    attribute
+  end
+
+  def run
+    logger = Logging.logger[Enigma]
+
+    Enigma.config.environment = environment
+    Enigma.setup do |config|
+      config.app_name = 'enigma'
+      config.log_level = :debug if debug?
+    end
+
+    if showconfig?
+      name = String === showconfig ? showconfig : nil
+      Enigma.help.show(name, :descriptions => true, :values => true)
+      exit(0)
+    end
+
+    server = Enigma::App.new
+    daemon = Servolux::Daemon.new(
+      :server => server,
+      :timeout => 60,
+      :nochdir => true
+    )
+
+    if Enigma.config.log_to.include? 'logfile'
+      daemon.log_file = Logging.appenders['logfile'].filename
+      daemon.look_for = %r/ Running$/
+    end
+
+    if status?
+      STDOUT.puts "Enigma is #{daemon.alive? ? 'running' : 'stopped'}"
+      exit(0)
+    end
+
+    if graceful? or kill?
+      daemon.kill(kill) if kill?
+      daemon.shutdown if graceful?
+      exit(0)
+    end
+
+    logger.info "Loaded the #{Enigma.config.environment} environment"
+
+    if daemon?
+      daemon.startup
+    else
+      server.startup true
+    end
+
+  rescue SystemExit => e
+    raise if e.status != 0
+  rescue Servolux::Daemon::Error => err
+    abort "<#{err.class.name}> #{err.message}"
+  rescue Exception => err
+    abort("<#{err.class.name}> #{err.message}\n\t" +
+          err.backtrace.join("\n\t"))
+  end
+end
+
