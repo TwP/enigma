@@ -61,7 +61,7 @@ Enigma.defaults {
     by their beanstalk 'job.id' number.
   __
   decode_folder(Proc.new {
-    File.join('decode', config.environment)
+    File.join('decode', config.environment.to_s)
   })
 
   desc 'Container for the beanstalk configuration'
